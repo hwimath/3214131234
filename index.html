@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>세자리수의 곱셈 문장제</title>
+  <style>
+    body {
+      background-color: white;
+      color: black;
+      font-family: sans-serif;
+      margin: 20px;
+      max-width: 600px;
+    }
+    h1, h2, h3 {
+      color: black;
+    }
+    .hidden {
+      display: none;
+    }
+    .energy-bar-container {
+      width: 100%;
+      height: 20px;
+      background-color: #ddd;
+      margin: 10px 0;
+    }
+    .energy-bar {
+      height: 100%;
+      width: 100%;
+      background-color: black;
+      transition: width 1s linear;
+    }
+    .question-container {
+      margin-top: 20px;
+    }
+    .score, .lives, .timer, .response {
+      margin: 10px 0;
+    }
+    input[type="text"] {
+      width: 100px;
+    }
+    button {
+      background-color: white;
+      color: black;
+      border: 1px solid black;
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: black;
+      color: white;
+    }
+    #response {
+      white-space: pre-wrap;
+      border: 1px solid black;
+      padding: 5px;
+      margin-top: 10px;
+      min-height: 50px;
+    }
+  </style>
+</head>
+<body>
+<h1>세자리수의 곱셈 문장제</h1>
+
+<!-- 난이도/이름 입력 화면 -->
+<div id="start-screen">
+  <div>
+    <label for="playerName">이름을 입력하세요:</label><br />
+    <input type="text" id="playerName" placeholder="예: 홍길동" />
+  </div>
+  <br />
+  <div>
+    <p>난이도를 선택하세요:</p>
+    <button onclick="setDifficulty('최상')">최상 (20초, +20점)</button>
+    <button onclick="setDifficulty('상')">상 (30초, +15점)</button>
+    <button onclick="setDifficulty('중')">중 (40초, +13점)</button>
+    <button onclick="setDifficulty('하')">하 (무제한, +10점)</button>
+  </div>
+</div>
+
+<!-- 실제 퀴즈 진행 화면 -->
+<div id="quiz-screen" class="hidden">
+  <div class="score">점수: <span id="score">0</span></div>
+  <div class="lives">남은 기회: <span id="lives">3</span></div>
+  <div class="timer">총 경과 시간: <span id="elapsedTime">0</span>초</div>
+
+  <div class="energy-bar-container" id="energy-bar-container">
+    <div class="energy-bar" id="energy-bar"></div>
+  </div>
+
+  <div id="question-section" class="question-container">
+    <!-- 문항 번호 표기 없이, 문제 텍스트만 표시 -->
+    <div id="question-text"></div>
+    <div>
+      <input type="text" id="answerInput" placeholder="답 입력" />
+      <button onclick="submitAnswer()">확인</button>
+    </div>
+  </div>
+
+  <div id="feedback" style="margin-top:10px;"></div>
+  <button onclick="nextQuestion()" id="next-btn" class="hidden">다음 문제</button>
+
+  <hr />
+
+  <!-- 점수 전송하기 버튼: 게임 끝난 뒤에만 노출 -->
+  <button id="submit-score-btn" class="hidden" onclick="submitScore()">점수 전송하기</button>
+  <div id="response"></div>
+</div>
+
+<script>
+/* 
+  문제 데이터 (총 60문제 + 정답). 
+  - 세 자리수 × 두 자리수 (40문제)
+  - (A×B)+(C×D) (20문제)
+  절대 생략 없이 모두 사용.
+*/
+const questionData = [
+  // 세 자리수 × 두 자리수 (40문제)
+  { q: "세준이는 장난감 자동차를 325원에 한 개씩 살 수 있습니다. 이 자동차를 12개 사면 총 얼마가 필요할까요?", a: 3900 },
+  { q: "색연필이 한 상자에 418자루 들어있습니다. 같은 상자를 13개 샀다면 총 몇 자루가 될까요?", a: 5434 },
+  { q: "동물 보호소에 고양이 사료 한 포대가 276g 들어 있습니다. 이런 사료 포대를 15개 사면 몇 g이 될까요?", a: 4140 },
+  { q: "우표 한 장은 324원입니다. 이 우표를 14장 사려면 총 얼마가 필요할까요?", a: 4536 },
+  { q: "연극 공연장에는 한 줄에 236좌석이 있습니다. 18줄이 있다면 좌석은 모두 몇 개일까요?", a: 4248 },
+  { q: "한 권에 402쪽짜리 책이 있습니다. 이런 책이 13권 있다면 총 몇 쪽을 읽어야 할까요?", a: 5226 },
+  { q: "색종이 한 묶음이 540원이고, 15묶음을 산다면 총 얼마가 필요할까요?", a: 8100 },
+  { q: "도서관 도장을 한 개 325원에 살 수 있습니다. 이 도장을 16개 주문하면 얼마를 내야 할까요?", a: 5200 },
+  { q: "퍼즐 한 상자를 423원에 살 수 있습니다. 같은 상자를 12개 샀다면 얼마를 지불해야 할까요?", a: 5076 },
+  { q: "우유 한 팩은 368원입니다. 14팩을 샀다면 총 얼마가 필요할까요?", a: 5152 },
+  { q: "농구공 한 개가 507원입니다. 농구공을 13개 구매한다면 총 얼마가 들까요?", a: 6591 },
+  { q: "미니피자 한 판에 256원입니다. 18판 주문하면 얼마를 내야 할까요?", a: 4608 },
+  { q: "과자 한 봉지는 409원입니다. 17봉지를 샀다면 총 얼마일까요?", a: 6953 },
+  { q: "공책 한 권이 305원입니다. 공책을 19권 샀다면 총 얼마가 될까요?", a: 5795 },
+  { q: "유람선 요금은 349원입니다. 승객이 15명일 때 모두 얼마가 필요할까요?", a: 5235 },
+  { q: "선물 세트 한 세트가 212원, 세트를 14개 샀다면 얼마일까요?", a: 2968 },
+  { q: "나무토막 하나가 617원입니다. 12개 샀다면 총 얼마가 될까요?", a: 7404 },
+  { q: "티셔츠 한 장 738원, 15장을 사면 총 얼마일까요?", a: 11070 },
+  { q: "스티커 한 세트(10장 묶음)가 259원, 14세트를 샀다면 얼마일까요?", a: 3626 },
+  { q: "공책 한 권이 309원입니다. 17권 샀다면 총 얼마가 필요할까요?", a: 5253 },
+  { q: "운동화 한 켤레가 423원입니다. 14켤레 산다면 얼마일까요?", a: 5922 },
+  { q: "화단 한 줄에 512송이 꽃을 심습니다. 이런 화단을 12줄 만들면 몇 송이를 심을까요?", a: 6144 },
+  { q: "목도리가 한 개에 294원입니다. 18개 팔면 총 얼마를 벌까요?", a: 5292 },
+  { q: "전시회 입장권이 374원입니다. 단체 16명이 입장한다면 총 얼마일까요?", a: 5984 },
+  { q: "한 판에 404개 달걀이 들어있습니다. 이런 달걀판을 13판 구입하면 달걀은 모두 몇 개일까요?", a: 5252 },
+  { q: "도시락 한 개가 595원입니다. 도시락을 10개 주문하면 얼마를 내야 할까요?", a: 5950 },
+  { q: "보드게임 한 개에 735원입니다. 보드게임 12개를 구입하려면 얼마가 필요할까요?", a: 8820 },
+  { q: "풍선 하나에 216원입니다. 교실을 꾸미려 18개 샀다면 총 얼마일까요?", a: 3888 },
+  { q: "다육식물 한 화분이 325원입니다. 17개 산다면 총 얼마일까요?", a: 5525 },
+  { q: "490원짜리 학습지를 14권 샀다면 총 얼마가 필요할까요?", a: 6860 },
+  { q: "마스크 한 박스에 728장이 들어있습니다. 박스를 11개 산다면 몇 장일까요?", a: 8008 },
+  { q: "테이크아웃 컵 세트가 347원인데, 이를 16개 샀다면 얼마일까요?", a: 5552 },
+  { q: "닭고기 한 마리가 582원입니다. 치킨을 만들기 위해 13마리를 샀다면 얼마가 들까요?", a: 7566 },
+  { q: "연습장 한 권당 619원입니다. 12권을 구입한다면 총 얼마일까요?", a: 7428 },
+  { q: "장미꽃 한 송이가 405원입니다. 15송이를 준비하려면 얼마가 필요할까요?", a: 6075 },
+  { q: "자전거 한 대가 712원입니다. 13대를 구입한다면 총 얼마일까요?", a: 9256 },
+  { q: "학용품 꾸러미 한 세트가 581원이고, 14세트를 샀다면 총 얼마일까요?", a: 8134 },
+  { q: "떡 한 팩을 294원에 구매했습니다. 17팩 샀다면 총 얼마가 들까요?", a: 4998 },
+  { q: "장갑 한 켤레가 436원입니다. 15켤레를 사려고 할 때 총 얼마가 들까요?", a: 6540 },
+  { q: "이어폰 한 개가 328원입니다. 19개 구매하면 총 얼마를 지불해야 할까요?", a: 6232 },
+
+  // (A×B) + (C×D) (20문제)
+  { q: "가방(325원) 12개와 지갑(410원) 15개를 샀을 때 총 금액은?", a: 10050 },
+  { q: "사과(276원) 13개와 배(195원) 16개를 샀을 때 과일값은?", a: 6708 },
+  { q: "색연필 세트(415원) 12개와 스케치북(319원) 15권을 샀을 때 총 비용은?", a: 9765 },
+  { q: "티셔츠(508원) 14장과 운동화(629원) 11켤레를 샀을 때 총 얼마일까요?", a: 14031 },
+  { q: "초콜릿(342원) 18개와 사탕(217원) 16개를 샀을 때 총 비용은?", a: 9628 },
+  { q: "연필(205원) 19자루와 볼펜(317원) 14자루를 샀을 때 총 비용은?", a: 8333 },
+  { q: "치즈피자(425원) 15판과 불고기피자(519원) 13판을 시켰을 때 총 비용은?", a: 13122 },
+  { q: "축구공(314원) 17개와 농구공(428원) 12개를 샀을 때 총 비용은?", a: 10474 },
+  { q: "케이크(670원) 12판과 음료(245원) 20병을 샀을 때 총 비용은?", a: 12940 },
+  { q: "여행용 가방(512원) 13개와 작은 파우치(129원) 14개 구입 시 총 금액은?", a: 8462 },
+  { q: "인형(385원) 16개와 블록(472원) 10세트를 샀을 때 총 비용은?", a: 10880 },
+  { q: "과자(195원) 18봉지와 음료수(308원) 13캔을 샀을 때 총 비용은?", a: 7514 },
+  { q: "긴 벤치(436원) 15개, 테이블(528원) 9개 구입 시 총 비용은?", a: 11292 },
+  { q: "장미꽃(320원) 11송이와 카네이션(495원) 12송이를 샀을 때 총 꽃값은?", a: 9460 },
+  { q: "샌드위치(276원) 14개와 음료(330원) 15병을 샀을 때 총 식비는?", a: 8814 },
+  { q: "책갈피 재료(159원) 20세트와 필름지(208원) 14장을 샀을 때 재료비는?", a: 6092 },
+  { q: "알람시계(609원) 11대와 벽걸이시계(724원) 8대를 샀을 때 총 비용은?", a: 12491 },
+  { q: "컵케이크(185원) 14개와 쿠키(417원) 12봉지를 샀을 때 총 비용은?", a: 7594 },
+  { q: "운동화(579원) 13켤레와 농구 유니폼(426원) 15벌 구매 시 총 비용은?", a: 13917 },
+  { q: "빵(345원) 16개와 머핀(218원) 19개를 샀을 때 총 얼마일까요?", a: 9662 },
+];
+
+// 전역 변수
+let shuffledQuestions = [];  // 60문제 랜덤 순서
+let currentIndex = 0;
+let score = 0;
+let lives = 3;
+let difficulty = null;
+let timeLimit = 0;
+let timerInterval = null;
+let gameStartTime = null;
+let totalElapsedTime = 0;
+let timeLeft = 0;
+let infiniteMode = false;
+let playerName = "";
+
+// 난이도 선택
+function setDifficulty(diff) {
+  const nameInput = document.getElementById('playerName');
+  if (!nameInput.value.trim()) {
+    alert("이름을 입력해주세요!");
+    return;
+  }
+  playerName = nameInput.value.trim();
+  difficulty = diff;
+
+  switch(difficulty) {
+    case "최상": timeLimit = 20; break;
+    case "상":   timeLimit = 30; break;
+    case "중":   timeLimit = 40; break;
+    case "하":   timeLimit = 0;  break; // 무제한
+  }
+
+  // 화면 전환
+  document.getElementById('start-screen').classList.add('hidden');
+  document.getElementById('quiz-screen').classList.remove('hidden');
+
+  // 게임 시작
+  startGame();
+}
+
+function startGame() {
+  // 1) 문제 순서를 무작위로 섞기
+  shuffledQuestions = shuffleArray(questionData);
+
+  currentIndex = 0;
+  score = 0;
+  lives = 3;
+  totalElapsedTime = 0;
+  infiniteMode = false;
+
+  document.getElementById('score').innerText = score;
+  document.getElementById('lives').innerText = lives;
+  document.getElementById('feedback').innerText = "";
+  document.getElementById('next-btn').classList.add('hidden');
+  document.getElementById('submit-score-btn').classList.add('hidden');
+
+  // 시간 측정용
+  gameStartTime = Date.now();
+  startTotalTimeTimer();
+
+  // 첫 문제 표시
+  showQuestion();
+  if (difficulty !== "하") {
+    startEnergyBar();
+  } else {
+    // 무제한 모드면 에너지바 숨김
+    document.getElementById('energy-bar-container').style.display = 'none';
+  }
+}
+
+// 배열 셔플 함수(Fisher–Yates)
+function shuffleArray(array) {
+  const arr = array.slice(); // 원본 복사
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// 전체 경과 시간 타이머
+function startTotalTimeTimer() {
+  timerInterval = setInterval(() => {
+    const now = Date.now();
+    totalElapsedTime = Math.floor((now - gameStartTime) / 1000);
+    document.getElementById('elapsedTime').innerText = totalElapsedTime;
+  }, 1000);
+}
+
+function showQuestion() {
+  let questionObj;
+
+  if (!infiniteMode) {
+    // 60문제 랜덤 순서로 진행
+    if (currentIndex < shuffledQuestions.length) {
+      questionObj = shuffledQuestions[currentIndex];
+    } else {
+      // 60문제 끝 -> 무한 랜덤 모드
+      infiniteMode = true;
+      alert("모든 문제를 다 풀었습니다! 이제 무작위로 계속 출제됩니다.");
+      showQuestion();
+      return;
+    }
+  } else {
+    // 무한 랜덤
+    const randIndex = Math.floor(Math.random() * questionData.length);
+    questionObj = questionData[randIndex];
+  }
+
+  // 문항 번호 제거 → question-number 요소 사용X
+  document.getElementById('question-text').innerText = questionObj.q;
+  document.getElementById('answerInput').value = "";
+  document.getElementById('feedback').innerText = "";
+  document.getElementById('answerInput').focus();
+  document.getElementById('next-btn').classList.add('hidden');
+
+  // 제한 시간 초기화
+  if (difficulty !== "하") {
+    timeLeft = timeLimit;
+    updateEnergyBar();
+  }
+}
+
+function submitAnswer() {
+  const userAnswer = document.getElementById('answerInput').value.trim();
+  if (userAnswer === "") {
+    alert("답을 입력해주세요!");
+    return;
+  }
+
+  let questionObj;
+  if (!infiniteMode) {
+    questionObj = shuffledQuestions[currentIndex];
+  } else {
+    // 무한 랜덤 모드 -> 직전 문제 활용(간단 구현)
+    questionObj = shuffledQuestions[currentIndex]; 
+  }
+
+  const correctAnswer = questionObj.a;
+  const feedbackEl = document.getElementById('feedback');
+
+  if (parseInt(userAnswer, 10) === correctAnswer) {
+    feedbackEl.innerText = "정답입니다!";
+    addScore();
+  } else {
+    feedbackEl.innerText = `오답입니다! 정답은 ${correctAnswer}입니다.`;
+    loseLife();
+  }
+
+  document.getElementById('next-btn').classList.remove('hidden');
+
+  if (difficulty !== "하") {
+    // 시간 소멸
+    document.getElementById('energy-bar').style.width = '0%';
+    timeLeft = 0;
+  }
+}
+
+function addScore() {
+  switch(difficulty) {
+    case "최상": score += 20; break;
+    case "상":   score += 15; break;
+    case "중":   score += 13; break;
+    case "하":   score += 10; break;
+  }
+  document.getElementById('score').innerText = score;
+}
+
+function loseLife() {
+  lives--;
+  document.getElementById('lives').innerText = lives;
+  if (lives <= 0) {
+    endGame(true);
+  }
+}
+
+function nextQuestion() {
+  if (!infiniteMode) {
+    currentIndex++;
+  }
+  showQuestion();
+}
+
+function startEnergyBar() {
+  const barInterval = setInterval(() => {
+    if (infiniteMode) {
+      clearInterval(barInterval);
+      return;
+    }
+    if (difficulty === "하") {
+      clearInterval(barInterval);
+      return;
+    }
+    if (lives <= 0) {
+      clearInterval(barInterval);
+      return;
+    }
+
+    if (timeLeft > 0) {
+      timeLeft--;
+      updateEnergyBar();
+    } else {
+      // 시간 초과
+      loseLife();
+      document.getElementById('feedback').innerText = "시간이 초과되었습니다!";
+      document.getElementById('next-btn').classList.remove('hidden');
+      document.getElementById('energy-bar').style.width = '0%';
+      timeLeft = 0;
+    }
+  }, 1000);
+}
+
+function updateEnergyBar() {
+  const percentage = (timeLeft / timeLimit) * 100;
+  document.getElementById('energy-bar').style.width = percentage + '%';
+}
+
+// 게임 종료
+function endGame(byForce) {
+  clearInterval(timerInterval);
+
+  if (byForce) {
+    alert("게임이 종료되었습니다! 오답을 3회 하셨습니다.");
+  } else {
+    alert("게임을 모두 풀었습니다!");
+  }
+
+  // 점수 전송 버튼 노출
+  document.getElementById('submit-score-btn').classList.remove('hidden');
+}
+
+// 점수 전송
+function submitScore() {
+  const finalElapsedTime = totalElapsedTime;
+  saveData("세자리수의 곱셈 문장제", playerName, score, finalElapsedTime);
+}
+
+// 서버 전송 예시 함수
+function saveData(game, name, score, elapsedTime) {
+  const FUNCTION_URL = "https://us-central1-record-f420d.cloudfunctions.net/report";
+
+  const requestData = {
+    game,
+    name,
+    score: parseInt(score, 10),
+    elapsedTime: parseInt(elapsedTime, 10)
+  };
+
+  fetch(FUNCTION_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(requestData)
+  })
+  .then(async (response) => {
+    const responseData = await response.json();
+    if (response.ok) {
+      document.getElementById('response').innerText = 
+        `성공: ${JSON.stringify(responseData, null, 2)}`;
+    } else {
+      document.getElementById('response').innerText = 
+        `오류: ${JSON.stringify(responseData, null, 2)}`;
+    }
+  })
+  .catch((error) => {
+    console.error('요청 실패:', error);
+    document.getElementById('response').innerText = 
+      `네트워크 오류: ${error.message}`;
+  });
+}
+</script>
+</body>
+</html>
